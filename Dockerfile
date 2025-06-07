@@ -6,4 +6,4 @@ COPY . .
 
 RUN pip install --no-cache-dir discord.py flask aiohttp
 
-CMD ["python", "forgejo-discord-bot.py"]
+CMD ["python", "forgejo_discord_bot/cli.py"]
