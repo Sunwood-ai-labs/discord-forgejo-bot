@@ -1,0 +1,1 @@
+# forgejo_discord_bot パッケージ初期化ファイル
