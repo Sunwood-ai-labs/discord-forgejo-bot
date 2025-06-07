@@ -157,34 +157,46 @@ async def check_issue_command(interaction: discord.Interaction, issue_number: in
 def forgejo_webhook():
     """Forgejoからのwebhookを処理"""
     try:
+        print("=== Webhook受信 ===")
+        print(f"Headers: {dict(request.headers)}")
+        print(f"Raw data: {request.data}")
+
         # Secret検証（設定されている場合）
         if WEBHOOK_SECRET:
             signature = request.headers.get('X-Gitea-Signature')
             if not verify_signature(request.data, signature, WEBHOOK_SECRET):
+                print("シグネチャ検証失敗")
                 return jsonify({'error': 'Invalid signature'}), 401
         
         data = request.get_json()
+        print(f"受信データ: {data}")
         
         if not data:
+            print("JSONデータなし")
             return jsonify({'error': 'No JSON data'}), 400
         
         # webhook typeを確認
         action = data.get('action')
         issue = data.get('issue', {})
+        print(f"action: {action}")
         
         if action in ['opened', 'closed', 'reopened']:
+            print("issue通知分岐")
             # 非同期でDiscordに通知
             asyncio.run_coroutine_threadsafe(
                 send_issue_notification(action, issue),
                 bot.loop
             )
         elif action == 'created' and 'comment' in data:
+            print("コメント通知分岐")
             # コメント通知
             comment = data.get('comment', {})
             asyncio.run_coroutine_threadsafe(
                 send_comment_notification(issue, comment),
                 bot.loop
             )
+        else:
+            print("通知対象外のactionまたは不明なaction")
         
         return jsonify({'status': 'success'}), 200
         
