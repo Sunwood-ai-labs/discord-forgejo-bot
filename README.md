@@ -12,21 +12,36 @@
 ForgejoとDiscordを連携するBotです。プルリクやIssueの通知をDiscordに送信します。  
 さらに、**Discordのスラッシュコマンド（`/issue`）でForgejoにIssueを作成することも可能です。**
 
-## 📦 インストール
+## 📦 Dockerでの起動
 
 ```sh
 git clone https://github.com/yourname/discord-forgejo-bot.git
 cd discord-forgejo-bot
 cp .env.example .env
-# 必要に応じて.envを編集
+# .envを編集して各種トークンやURLを設定
 docker-compose up -d
 ```
+
+- Flaskサーバはデフォルトでポート5000で待ち受けます（`.env`で変更可）。
+- ForgejoのWebhookに `http://<サーバーIP>:5000/webhook/forgejo` を設定してください。
+
+## ⚙️ 必要な環境変数
+
+`.env.example` を参照してください。主な変数は以下の通りです。
+
+- `DISCORD_TOKEN` ... Discord Botのトークン
+- `FORGEJO_URL` ... ForgejoのURL（例: https://git.example.com）
+- `FORGEJO_TOKEN` ... Forgejo APIトークン
+- `REPO_OWNER` ... リポジトリオーナー
+- `REPO_NAME` ... リポジトリ名
+- `DISCORD_CHANNEL_ID` ... 通知を送るDiscordチャンネルID
+- `WEBHOOK_SECRET` ... Webhookシークレット（任意）
 
 ## 📝 使い方
 
 1. Discord Developer PortalでBotを作成し、トークンを取得
-2. .envファイルに各種トークンやURLを設定
-3. DockerまたはローカルでBotを起動
+2. `.env` ファイルに各種トークンやURLを設定
+3. DockerでBotを起動
 4. ForgejoのWebhookを設定し、Discord通知を受け取る
 
 ### 💡 DiscordからForgejoにIssueを作成する
@@ -38,6 +53,22 @@ Discordのスラッシュコマンド `/issue` を使って、ForgejoにIssueを
 /issue タイトル: バグ報告 本文: ボタンが動作しません
 ```
 （実際のコマンドの引数形式はBotの実装に従ってください）
+
+## 🗂️ ディレクトリ構成（主要部分）
+
+```
+forgejo_discord_bot/
+  ├── __init__.py
+  ├── __main__.py
+  ├── bot.py
+  ├── cli.py
+  ├── forgejo_api.py
+  └── webhook.py
+docker-compose.yml
+Dockerfile
+.env.example
+README.md
+```
 
 ## 📁 サンプル
 サンプルBotや設定例は [example/README.md](./example/README.md) を参照してください。
