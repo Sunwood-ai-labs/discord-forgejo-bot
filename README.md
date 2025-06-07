@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="header.png" alt="header" width="600"/>
+  <img src="header.png" alt="header" width="100%"/>
   <h1>discord-forgejo-bot</h1>
   <p>
     <img src="https://img.shields.io/badge/Python-3.10-blue?logo=python">
