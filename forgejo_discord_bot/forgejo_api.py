@@ -41,3 +41,17 @@ class ForgejoAPI:
                     return await response.json()
                 else:
                     return None
+
+    async def create_comment(self, owner, repo, issue_number, body):
+        """指定したissueにコメントを追加"""
+        url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{issue_number}/comments"
+        data = {
+            'body': body
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=self.headers, json=data) as response:
+                if response.status == 201:
+                    return await response.json()
+                else:
+                    text = await response.text()
+                    raise Exception(f"Failed to create comment: {response.status} - {text}")
