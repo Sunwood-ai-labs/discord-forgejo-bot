@@ -120,7 +120,10 @@ async def on_message(message):
             # Forgejoにコメント投稿
             try:
                 # コメント本文
-                comment_body = f"{message.author.display_name}（Discord）:\n{message.content}"
+                comment_body = (
+                    f"{message.author.display_name}（Discord）:\n{message.content}"
+                    "\n\n---\n*Posted from Discord*"
+                )
                 await forgejo.create_comment(
                     owner=REPO_OWNER,
                     repo=REPO_NAME,
@@ -263,6 +266,10 @@ async def send_issue_notification(action, issue):
 async def send_comment_notification(issue, comment):
     """コメント追加をDiscordに通知（同じissueは同じスレッドに返信）"""
     try:
+        # Discord由来のコメントは通知しない
+        if comment.get('body') and "*Posted from Discord*" in comment['body']:
+            return
+
         channel_id = int(os.getenv('DISCORD_CHANNEL_ID'))
         channel = bot.get_channel(channel_id)
         if not channel:
