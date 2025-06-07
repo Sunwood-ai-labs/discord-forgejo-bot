@@ -8,3 +8,21 @@ services:
       - 5000:5000
     container_name: forgejo-discord-bot
     restart: unless-stopped
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:16
+    container_name: forgejo-discord-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: forgejo_discord
+      POSTGRES_USER: forgejo_user
+      POSTGRES_PASSWORD: forgejo_pass
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
