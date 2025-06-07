@@ -10,7 +10,8 @@ requires-python = ">=3.8"
 dependencies = [
     "discord.py>=2.0.0",
     "aiohttp",
-    "flask"
+    "flask",
+    "psycopg2-binary"
 ]
 
 [project.scripts]
