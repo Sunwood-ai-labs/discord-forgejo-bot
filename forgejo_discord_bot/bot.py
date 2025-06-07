@@ -4,6 +4,69 @@ from discord.ext import commands
 from .forgejo_api import ForgejoAPI
 
 import asyncio
+import psycopg2
+
+# PostgreSQL接続情報
+DB_HOST = os.getenv('DB_HOST', 'postgres')
+DB_PORT = int(os.getenv('DB_PORT', 5432))
+DB_NAME = os.getenv('DB_NAME', 'forgejo_discord')
+DB_USER = os.getenv('DB_USER', 'forgejo_user')
+DB_PASSWORD = os.getenv('DB_PASSWORD', 'forgejo_pass')
+
+def get_db_conn():
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
+
+def ensure_issue_threads_table():
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS issue_threads (
+                issue_number INTEGER PRIMARY KEY,
+                thread_id BIGINT NOT NULL
+            );
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"DBテーブル作成エラー: {e}")
+
+def get_thread_id_from_db(issue_number):
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT thread_id FROM issue_threads WHERE issue_number = %s;", (issue_number,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            return row[0]
+        return None
+    except Exception as e:
+        print(f"DB取得エラー: {e}")
+        return None
+
+def set_thread_id_to_db(issue_number, thread_id):
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO issue_threads (issue_number, thread_id)
+            VALUES (%s, %s)
+            ON CONFLICT (issue_number) DO UPDATE SET thread_id = EXCLUDED.thread_id;
+        """, (issue_number, thread_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"DB保存エラー: {e}")
 
 # 設定
 DISCORD_TOKEN = os.getenv('DISCORD_TOKEN')
@@ -22,6 +85,8 @@ forgejo = ForgejoAPI(FORGEJO_URL, FORGEJO_TOKEN)
 async def on_ready():
     print(f'{bot.user} がログインしました！')
     try:
+        # DBテーブル作成
+        ensure_issue_threads_table()
         synced = await bot.tree.sync()
         print(f'{len(synced)} 個のスラッシュコマンドを同期しました')
     except Exception as e:
@@ -89,7 +154,7 @@ async def check_issue_command(interaction: discord.Interaction, issue_number: in
         await interaction.followup.send(embed=error_embed)
 
 async def send_issue_notification(action, issue):
-    """Issue状態変更をDiscordに通知"""
+    """Issue状態変更をDiscordに通知（同じissueは同じスレッドに返信）"""
     try:
         channel_id = int(os.getenv('DISCORD_CHANNEL_ID'))
         channel = bot.get_channel(channel_id)
@@ -114,12 +179,48 @@ async def send_issue_notification(action, issue):
         )
         embed.add_field(name="リポジトリ", value=f"{REPO_OWNER}/{REPO_NAME}", inline=True)
         embed.add_field(name="作成者", value=issue['user']['login'], inline=True)
-        await channel.send(embed=embed)
+
+        issue_number = issue['number']
+        thread = None
+
+        # "opened"または"reopened"時は新規スレッド作成
+        if action in ['opened', 'reopened']:
+            # 既存スレッドがあればそれを使う（再オープン時など）
+            thread_id = get_thread_id_from_db(issue_number)
+            if thread_id:
+                try:
+                    thread = await bot.fetch_channel(thread_id)
+                except Exception:
+                    thread = None
+            if not thread:
+                # 新規スレッド作成
+                thread_name = f"Issue #{issue_number}: {issue['title'][:80]}"
+                msg = await channel.send(embed=embed)
+                thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
+                set_thread_id_to_db(issue_number, thread.id)
+            else:
+                await thread.send(embed=embed)
+        else:
+            # "closed"などは既存スレッドに返信、なければ新規作成
+            thread_id = get_thread_id_from_db(issue_number)
+            if thread_id:
+                try:
+                    thread = await bot.fetch_channel(thread_id)
+                except Exception:
+                    thread = None
+            if not thread:
+                # 新規スレッド作成
+                thread_name = f"Issue #{issue_number}: {issue['title'][:80]}"
+                msg = await channel.send(embed=embed)
+                thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
+                set_thread_id_to_db(issue_number, thread.id)
+            else:
+                await thread.send(embed=embed)
     except Exception as e:
         print(f"Discord通知エラー: {e}")
 
 async def send_comment_notification(issue, comment):
-    """コメント追加をDiscordに通知"""
+    """コメント追加をDiscordに通知（同じissueは同じスレッドに返信）"""
     try:
         channel_id = int(os.getenv('DISCORD_CHANNEL_ID'))
         channel = bot.get_channel(channel_id)
@@ -133,6 +234,22 @@ async def send_comment_notification(issue, comment):
         )
         embed.add_field(name="コメント者", value=comment['user']['login'], inline=True)
         embed.add_field(name="内容", value=comment['body'][:500] + ('...' if len(comment['body']) > 500 else ''), inline=False)
-        await channel.send(embed=embed)
+
+        issue_number = issue['number']
+        thread = None
+        thread_id = get_thread_id_from_db(issue_number)
+        if thread_id:
+            try:
+                thread = await bot.fetch_channel(thread_id)
+            except Exception:
+                thread = None
+        if not thread:
+            # 新規スレッド作成
+            thread_name = f"Issue #{issue_number}: {issue['title'][:80]}"
+            msg = await channel.send(embed=embed)
+            thread = await msg.create_thread(name=thread_name, auto_archive_duration=1440)
+            set_thread_id_to_db(issue_number, thread.id)
+        else:
+            await thread.send(embed=embed)
     except Exception as e:
         print(f"コメント通知エラー: {e}")
