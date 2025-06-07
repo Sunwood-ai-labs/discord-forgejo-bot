@@ -1,0 +1,8 @@
+version: "3.8"
+services:
+  forgejo-discord-bot:
+    build: .
+    env_file:
+      - .env
+    container_name: forgejo-discord-bot
+    restart: unless-stopped
