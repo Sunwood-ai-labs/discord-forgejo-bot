@@ -53,6 +53,21 @@ def get_thread_id_from_db(issue_number):
         print(f"DB取得エラー: {e}")
         return None
 
+def get_issue_number_from_thread_id(thread_id):
+    try:
+        conn = get_db_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT issue_number FROM issue_threads WHERE thread_id = %s;", (thread_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if row:
+            return row[0]
+        return None
+    except Exception as e:
+        print(f"DB取得エラー: {e}")
+        return None
+
 def set_thread_id_to_db(issue_number, thread_id):
     try:
         conn = get_db_conn()
@@ -91,6 +106,32 @@ async def on_ready():
         print(f'{len(synced)} 個のスラッシュコマンドを同期しました')
     except Exception as e:
         print(f'コマンド同期に失敗: {e}')
+
+@bot.event
+async def on_message(message):
+    # Bot自身の発言は無視
+    if message.author.bot:
+        return
+
+    # スレッド内のメッセージのみ対象
+    if isinstance(message.channel, discord.Thread):
+        issue_number = get_issue_number_from_thread_id(message.channel.id)
+        if issue_number is not None:
+            # Forgejoにコメント投稿
+            try:
+                # コメント本文
+                comment_body = f"{message.author.display_name}（Discord）:\n{message.content}"
+                await forgejo.create_comment(
+                    owner=REPO_OWNER,
+                    repo=REPO_NAME,
+                    issue_number=issue_number,
+                    body=comment_body
+                )
+            except Exception as e:
+                print(f"Forgejoコメント投稿エラー: {e}")
+
+    # 他のコマンドも通す
+    await bot.process_commands(message)
 
 @bot.tree.command(name="issue", description="Forgejoにissueを作成します")
 async def create_issue_command(interaction: discord.Interaction, title: str, description: str, assignee: str = None):

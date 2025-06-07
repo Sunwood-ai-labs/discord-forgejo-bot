@@ -1,0 +1,14 @@
+{
+  "Servers": {
+    "Postgres": {
+      "Name": "forgejo_discord",
+      "Group": "Servers",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "forgejo_discord",
+      "Username": "forgejo_user",
+      "SSLMode": "prefer",
+      "PassFile": "/pgpass/pgpass"
+    }
+  }
+}
