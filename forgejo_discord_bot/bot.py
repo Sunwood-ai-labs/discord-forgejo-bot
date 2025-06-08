@@ -104,6 +104,21 @@ async def on_ready():
         ensure_issue_threads_table()
         synced = await bot.tree.sync()
         print(f'{len(synced)} 個のスラッシュコマンドを同期しました')
+
+        # 除外チャンネルリストを.envから取得
+        excluded_channels = os.getenv("EXCLUDED_CHANNELS", "")
+        excluded_channels = [name.strip() for name in excluded_channels.split(",") if name.strip()]
+
+        # 参加している全ギルドの全テキストチャンネルにBotを「追加」
+        for guild in bot.guilds:
+            for channel in guild.text_channels:
+                if channel.name not in excluded_channels:
+                    try:
+                        # ここでBotがチャンネルに「追加」されていることを通知（または初期化処理）
+                        await channel.send(f"Botがこのチャンネル（{channel.name}）で有効になりました。")
+                    except Exception as e:
+                        print(f"チャンネル {channel.name} への通知失敗: {e}")
+
     except Exception as e:
         print(f'コマンド同期に失敗: {e}')
 
@@ -121,8 +136,8 @@ async def on_message(message):
             try:
                 # コメント本文
                 comment_body = (
-                    f"{message.author.display_name}（Discord）:\n{message.content}"
-                    "\n\n---\n*Posted from Discord*"
+                    f"{message.content}"
+                    f"\n\n---\n*Posted from Discord by {message.author.display_name}（Discord）*"
                 )
                 await forgejo.create_comment(
                     owner=REPO_OWNER,
@@ -137,15 +152,23 @@ async def on_message(message):
     await bot.process_commands(message)
 
 @bot.tree.command(name="issue", description="Forgejoにissueを作成します")
-async def create_issue_command(interaction: discord.Interaction, title: str, description: str, assignee: str = None):
+async def create_issue_command(
+    interaction: discord.Interaction,
+    title: str,
+    description: str,
+    assignee: str = None,
+    repo: str = None
+):
     """Discord slash commandでissue作成"""
     await interaction.response.defer()
     try:
+        # デフォルトrepo名はチャンネル名
+        repo_name = repo if repo else interaction.channel.name
         author_info = f"\n\n---\n**作成者:** {interaction.user.mention} ({interaction.user.name})\n**Discord ID:** {interaction.user.id}"
         full_description = description + author_info
         issue = await forgejo.create_issue(
             owner=REPO_OWNER,
-            repo=REPO_NAME,
+            repo=repo_name,
             title=title,
             body=full_description,
             assignee=assignee
@@ -156,7 +179,7 @@ async def create_issue_command(interaction: discord.Interaction, title: str, des
             color=0x00ff00,
             url=issue['html_url']
         )
-        embed.add_field(name="リポジトリ", value=f"{REPO_OWNER}/{REPO_NAME}", inline=True)
+        embed.add_field(name="リポジトリ", value=f"{REPO_OWNER}/{repo_name}", inline=True)
         embed.add_field(name="作成者", value=issue['user']['login'], inline=True)
         embed.add_field(name="状態", value=issue['state'], inline=True)
         await interaction.followup.send(embed=embed)
@@ -267,7 +290,9 @@ async def send_comment_notification(issue, comment):
     """コメント追加をDiscordに通知（同じissueは同じスレッドに返信）"""
     try:
         # Discord由来のコメントは通知しない
-        if comment.get('body') and "*Posted from Discord*" in comment['body']:
+        import re
+        body = comment.get('body', '').strip()
+        if re.search(r"\*Posted from Discord by .+（Discord）\*$", body):
             return
 
         channel_id = int(os.getenv('DISCORD_CHANNEL_ID'))
