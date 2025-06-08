@@ -8,29 +8,26 @@ class ForgejoAPI:
             'Authorization': f'token {token}',
             'Content-Type': 'application/json'
         }
-    
+
     async def create_issue(self, owner, repo, title, body, assignee=None, labels=None):
         """Forgejoにissueを作成"""
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues"
-        
         data = {
-            'title': title,
-            'body': body
+            "title": title,
+            "body": body
         }
-        
         if assignee:
-            data['assignee'] = assignee
+            data["assignee"] = assignee
         if labels:
-            data['labels'] = labels
-            
+            data["labels"] = labels
+
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=self.headers, json=data) as response:
                 if response.status == 201:
                     return await response.json()
                 else:
-                    text = await response.text()
-                    raise Exception(f"Failed to create issue: {response.status} - {text}")
-    
+                    raise Exception(f"Failed to create issue: {response.status}")
+
     async def get_issue(self, owner, repo, issue_number):
         """指定したissueの詳細を取得"""
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{issue_number}"
@@ -46,12 +43,12 @@ class ForgejoAPI:
         """指定したissueにコメントを追加"""
         url = f"{self.base_url}/api/v1/repos/{owner}/{repo}/issues/{issue_number}/comments"
         data = {
-            'body': body
+            "body": body
         }
+        
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=self.headers, json=data) as response:
                 if response.status == 201:
                     return await response.json()
                 else:
-                    text = await response.text()
-                    raise Exception(f"Failed to create comment: {response.status} - {text}")
+                    raise Exception(f"Failed to create comment: {response.status}")
